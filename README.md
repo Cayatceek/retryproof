@@ -31,7 +31,7 @@ Callers must supply a **known initial state**, calculate the expected state afte
 - All requests use one stable idempotency key. Concurrent tasks share a bounded executor; results are collected within a single deadline.
 - Every response must be HTTP 2xx and expose the **same non-empty operation ID**. Any thrown exception or timeout fails validation.
 - The state invariant must pass. Successful HTTP responses alone cannot prove a single business effect.
-- Timeouts cancel outstanding tasks best-effort; background server requests may finish later. **Do not test against real financial accounts.**
+- Timeouts cancel outstanding tasks best-effort; background server requests may finish later. The SDK **does not read final state after a timeout**, because the results could be premature. It reports the run as invalid; reset disposable state and rerun after pending server operations settle. **Do not test against real financial accounts.**
 - RetryProof is an integration-test SDK, **not** a payment-processing or production retry library. It does not guarantee exactly-once delivery, inject network faults, or audit a distributed system.
 
 ## Development

@@ -47,6 +47,35 @@ class RetryVerifierTest {
     }
 
     @Test
+    void timeoutsAreInconclusiveAndDoNotReadPrematureFinalState() throws Exception {
+        var stateReads = new AtomicInteger();
+        RetryReport report = RetryVerifier.verify(
+            new RetryPlan("timeout", 2, 2, Duration.ofMillis(60)),
+            key -> {
+                Thread.sleep(2000); // Interruptible; do not leave a running test worker.
+                return new OperationResponse(200, key);
+            },
+            () -> { stateReads.incrementAndGet(); return 1; },
+            state -> state == 1);
+        assertTrue(report.timedOut());
+        assertEquals(0, stateReads.get());
+        assertFalse(report.stateMatches());
+        assertEquals(2, report.attempts().size());
+        assertThrows(AssertionError.class, report::assertValid);
+    }
+
+    @Test
+    void rejectsMissingOperationIdsAndServerFailures() throws Exception {
+        RetryPlan plan = new RetryPlan("no-id", 1, 1, Duration.ofSeconds(2));
+        RetryReport noId = RetryVerifier.verify(plan, key -> new OperationResponse(200, null),
+            () -> 1, state -> state == 1);
+        assertTrue(noId.violations().stream().anyMatch(s -> s.contains("no operation identifier")));
+        RetryReport serverFailure = RetryVerifier.verify(plan,
+            key -> new OperationResponse(503, key), () -> 1, state -> state == 1);
+        assertThrows(AssertionError.class, serverFailure::assertValid);
+    }
+
+    @Test
     void rejectsInvalidPlansAndSurfacesFailures() throws Exception {
         assertThrows(IllegalArgumentException.class,
             () -> new RetryPlan("", 1, 1, Duration.ofSeconds(1)));

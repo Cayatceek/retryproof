@@ -75,6 +75,9 @@ public final class RetryVerifier {
             for (Future<?> future : pending) future.cancel(true);
             pool.shutdownNow();
         }
-        return new RetryReport(outcomes, expectedFinalState.test(readFinalState.get()), timedOut);
+        // After a timeout, cancelled client tasks or in-flight server requests may
+        // still mutate state. Never call the final-state supplier prematurely.
+        boolean stateMatches = !timedOut && expectedFinalState.test(readFinalState.get());
+        return new RetryReport(outcomes, stateMatches, timedOut);
     }
 }
